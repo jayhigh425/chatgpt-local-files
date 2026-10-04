@@ -1,0 +1,39 @@
+name: Validate public kit
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  public-kit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check public files and syntax
+        shell: pwsh
+        run: |
+          & ./scripts/Check-ShareSafety.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Privacy check failed.' }
+          Get-ChildItem runtime,scripts -Filter *.mjs -Recurse | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax failed: $($_.Name)" }
+          }
+          Get-ChildItem runtime,scripts -Filter *.ps1 -Recurse | ForEach-Object {
+            $parseTokens=$null; $parseErrors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$parseTokens,[ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { throw "PowerShell syntax failed: $($_.Name)" }
+          }
+      - name: Verify public file hashes
+        shell: pwsh
+        run: |
+          foreach ($hashLine in Get-Content SHA256SUMS.txt) {
+            if ($hashLine -notmatch '^([0-9a-f]{64})  (.+)$') { throw 'Invalid hash manifest entry.' }
+            $expectedHash=$Matches[1]; $publicPath=$Matches[2]
+            if ((Get-FileHash -LiteralPath $publicPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedHash) {
+              throw "Hash mismatch: $publicPath"
+            }
+          }

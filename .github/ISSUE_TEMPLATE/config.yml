@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup guide / 安装说明
+    url: https://github.com/jayhigh425/chatgpt-local-files#quick-start
+    about: Check the setup prerequisites and troubleshooting first.

@@ -1,0 +1,20 @@
+# Install outside this public repository.
+node_modules/
+credentials/
+profiles/
+tasks/
+sandbox/
+test-data/
+downloads/
+runtime-backups/
+*.private.*
+*.dpapi
+*.log
+*.exe
+*.dll
+local-settings-backup.json
+package-lock.json
+!assets/package-lock.json
+release-dist/
+.DS_Store
+Thumbs.db

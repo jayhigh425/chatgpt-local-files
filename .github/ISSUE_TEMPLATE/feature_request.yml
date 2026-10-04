@@ -1,0 +1,15 @@
+name: Feature idea / 功能建议
+description: Explain a useful local Chat workflow or deployment improvement.
+title: "[Idea]: "
+body:
+  - type: textarea
+    id: usecase
+    attributes:
+      label: What would you like to do? / 想完成什么？
+      description: Describe the workflow and why the current kit is insufficient. Do not include private files or credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement / 建议

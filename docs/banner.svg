@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">ChatGPT Local Files</title>
+  <desc id="desc">Your ChatGPT chat. Your Windows files. Read, edit, run, save.</desc>
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101b2a"/><stop offset="1" stop-color="#0a3336"/></linearGradient></defs>
+  <rect width="1280" height="640" rx="24" fill="url(#bg)"/>
+  <circle cx="1160" cy="60" r="240" fill="#57ddbf" opacity=".06"/>
+  <g fill="#8ee8d0" font-family="Segoe UI,Arial,sans-serif"><text x="76" y="90" font-size="20" letter-spacing="4">OPEN SOURCE · WINDOWS · MCP</text></g>
+  <g fill="#fff" font-family="Segoe UI,Arial,sans-serif" font-weight="700"><text x="76" y="198" font-size="74">ChatGPT Local Files</text></g>
+  <g fill="#d3e4ec" font-family="Segoe UI,Arial,sans-serif"><text x="78" y="266" font-size="32">Your ChatGPT chat. Your Windows files.</text></g>
+  <g font-family="Segoe UI,Arial,sans-serif" font-size="22" text-anchor="middle">
+    <rect x="78" y="333" width="270" height="115" rx="16" fill="#21374a" stroke="#537086"/><text x="213" y="382" fill="#fff">ChatGPT Chat</text><text x="213" y="414" fill="#9bc5d5" font-size="17">Your own account</text>
+    <path d="M360 390h64m-14-10 14 10-14 10" fill="none" stroke="#8ee8d0" stroke-width="3"/>
+    <rect x="440" y="333" width="340" height="115" rx="16" fill="#21374a" stroke="#537086"/><text x="610" y="382" fill="#fff">Private MCP tunnel</text><text x="610" y="414" fill="#9bc5d5" font-size="17">Independent task backends</text>
+    <path d="M792 390h64m-14-10 14 10-14 10" fill="none" stroke="#8ee8d0" stroke-width="3"/>
+    <rect x="872" y="333" width="330" height="115" rx="16" fill="#124640" stroke="#5bbda9"/><text x="1037" y="382" fill="#fff">Your Windows computer</text><text x="1037" y="414" fill="#a8dfd3" font-size="17">Read · Edit · Run · Save</text>
+  </g>
+  <text x="78" y="541" fill="#8ee8d0" font-size="22" font-family="Segoe UI,Arial,sans-serif">No model API calls · 29 tools · Conflict-aware saves</text>
+  <text x="78" y="584" fill="#a6bcc8" font-size="18" font-family="Segoe UI,Arial,sans-serif">A reproducible setup kit. Each user creates their own private connection.</text>
+</svg>
