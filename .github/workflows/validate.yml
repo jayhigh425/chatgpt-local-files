@@ -9,15 +9,17 @@ jobs:
   public-kit:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - name: Check public files and syntax
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           & ./scripts/Check-ShareSafety.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Privacy check failed.' }
           Get-ChildItem runtime,scripts -Filter *.mjs -Recurse | ForEach-Object {
             node --check $_.FullName
             if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax failed: $($_.Name)" }
