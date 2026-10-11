@@ -1,0 +1,122 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { mkdir, writeFile, readFile, copyFile, symlink } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import http from 'node:http';
+const runtimeArgument = process.argv[2];
+if (!runtimeArgument || runtimeArgument.startsWith('--')) throw new Error('Pass your installed private runtime directory, optionally followed by --short.');
+if (process.platform !== 'win32') throw new Error('This regression uses Windows PowerShell.');
+const installed = path.resolve(runtimeArgument);
+const root = path.join(installed, 'verification', `stability-test-${randomUUID()}`);
+await mkdir(root, { recursive: true });
+for (const file of ['task-gateway-core.mjs', 'task-gateway.mjs', 'task-operations.mjs', 'rpc-diagnostics.mjs', 'local-status.mjs', 'status-ui.html', 'status-ui.js']) await copyFile(path.join(installed, file), path.join(root, file));
+await symlink(path.join(installed, 'node_modules'), path.join(root, 'node_modules'), 'junction');
+await writeFile(path.join(root, 'settings.private.json'), JSON.stringify({ accessMode: 'Full', allowedDirectories: [], configHome: root, nodeExecutable: process.execPath }));
+await writeFile(path.join(root, 'Status-LocalFiles.ps1'), 'Write-Output \'{"process_running":true,"healthy":true,"ready":true,"gatewayHealthy":true,"controlPlanePoll":true,"keeper_running":true,"supervisor_running":true,"autostart":true}\'');
+const worker = spawn(process.execPath, [path.join(root, 'task-gateway.mjs')], { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+let stderr = ''; worker.stderr.on('data', data => { stderr += data; }); worker.stdout.resume();
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+let base, instance, requestId = 0;
+const checks = [];
+async function call(name, args = {}, options) {
+  const response = await fetch(`${base}/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2026-07-28' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++requestId, method: 'tools/call', params: { name, arguments: args } }), ...options });
+  const reply = await response.json(); if (reply.error) throw new Error(JSON.stringify(reply.error)); return reply.result;
+}
+async function finish(task_id, result, timeout = 20000) {
+  const deadline = Date.now() + timeout;
+  while (result.structuredContent?.operation_state === 'running') {
+    assert(Date.now() < deadline, 'Operation completion timeout'); await pause(150);
+    result = await call('get_operation', { task_id, operation_id: result.structuredContent.operation_id });
+  }
+  return result;
+}
+try {
+  for (let i = 0; i < 100; i++) { try { const state = JSON.parse(await readFile(path.join(root, 'gateway.state.private.json'), 'utf8')); base = state.base; instance = state.instance; break; } catch { await pause(100); } }
+  assert(base, `Server did not become ready: ${stderr}`);
+  const page = await fetch(`${base}/ui`); assert.equal(page.status, 200); assert((await page.text()).includes(instance));
+  const rebindingStatus = await new Promise((resolve, reject) => { const req = http.get(`${base}/api/status`, { headers: { Host: 'evil.example' } }, res => { res.resume(); resolve(res.statusCode); }); req.on('error', reject); });
+  assert.equal(rebindingStatus, 403);
+  assert.equal((await fetch(`${base}/api/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"action":"stop_connection"}' })).status, 403);
+  const connection = await (await fetch(`${base}/api/connection`)).json(); assert.equal(connection.connection.ready, true);
+  checks.push('local status page, Host/origin/action protection, on-demand connection status');
+  const listReply = await (await fetch(`${base}/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++requestId, method: 'tools/list' }) })).json();
+  assert.equal(listReply.result.tools.length, 36);
+  assert.deepEqual(listReply.result.tools.find(t => t.name === 'save_chatgpt_file')._meta['openai/fileParams'], ['file']);
+  const capability = (await call('get_capabilities')).structuredContent;
+  assert.equal(capability.runtime_version, '1.2.1-local'); assert.equal(capability.tool_count, 36);
+  assert.deepEqual(capability.tools, listReply.result.tools.map(t => t.name));
+  assert.equal(capability.restart_recovery, false); assert.equal(capability.local_to_chatgpt_binary_mount, false);
+  checks.push('36 tool descriptors, accurate task-free capabilities and ChatGPT file input metadata');
+  const eventAbort = new AbortController();
+  const eventResponse = await fetch(`${base}/events`, { signal: eventAbort.signal }); const eventReader = eventResponse.body.getReader();
+  await eventReader.read();
+  const taskA = (await call('begin_task', { label: 'Isolated A' })).structuredContent.task_id;
+  assert.equal((await call('read_file', { task_id: taskA, path: 'local-assistant://capabilities' })).structuredContent.tool_count, 36);
+  let pushTimer;
+  const eventUpdate = await Promise.race([eventReader.read(), new Promise((_, reject) => { pushTimer = setTimeout(() => reject(new Error('No status push after task start')), 4000); })]);
+  clearTimeout(pushTimer); assert(Buffer.from(eventUpdate.value).toString().includes(taskA)); eventAbort.abort();
+  checks.push('status updates pushed after a task event without periodic health polling');
+  const taskB = (await call('begin_task', { label: 'Isolated B' })).structuredContent.task_id;
+  const file = path.join(root, 'original.txt'); await writeFile(file, 'original');
+  const editA = (await finish(taskA, await call('prepare_file_edit', { task_id: taskA, files: [file] }))).structuredContent.edit_id;
+  const editB = (await finish(taskB, await call('prepare_file_edit', { task_id: taskB, files: [file] }))).structuredContent.edit_id;
+  const cmd = value => `$f = ConvertFrom-Json $env:LOCAL_ASSISTANT_WORK_FILES; Start-Sleep -Seconds 2; [IO.File]::WriteAllText($f[0].working_copy, '${value}')`;
+  const resultA = await call('run_file_task', { task_id: taskA, edit_id: editA, command: cmd('from A'), publish: true, request_key: 'edit A' });
+  const resultB = await call('run_file_task', { task_id: taskB, edit_id: editB, command: cmd('from B'), publish: true, request_key: 'edit B' });
+  const [doneA, doneB] = await Promise.all([finish(taskA, resultA), finish(taskB, resultB)]);
+  assert.equal(doneA.isError, undefined); assert.equal(doneB.structuredContent.code, 'FILE_CONFLICT'); assert.equal(await readFile(file, 'utf8'), 'from A');
+  checks.push('parallel script edits: one publishes, the conflicting copy is retained');
+  assert.equal((await call('get_operation', { task_id: taskB, operation_id: doneA.structuredContent.operation_id })).structuredContent.code, 'OPERATION_NOT_FOUND');
+  const append = { task_id: taskA, path: file, content: '+once', mode: 'append', request_key: 'append once' };
+  const appended = await finish(taskA, await call('write_file', append)); assert(!appended.isError, JSON.stringify(appended));
+  await call('write_file', append); assert.equal(await readFile(file, 'utf8'), 'from A+once');
+  assert.equal((await call('write_file', { ...append, content: '+different' })).structuredContent.code, 'REQUEST_KEY_REUSED');
+  checks.push('request key prevents duplicate append; cross-task operation isolation');
+  let aborted = false;
+  const reconnectArgs = { task_id: taskA, command: "Start-Sleep -Seconds 3; Write-Output 'survived-disconnect'", request_key: 'dropped-response' };
+  try { await call('run_file_task', reconnectArgs, { signal: AbortSignal.timeout(250) }); } catch { aborted = true; }
+  assert(aborted); await pause(250);
+  const recovered = await call('get_operation', { task_id: taskA, request_key: 'dropped-response' });
+  assert.equal(recovered.structuredContent.operation_state, 'running');
+  const legacyQuery = await call('read_file', { task_id: taskA, path: `local-assistant://operations/${recovered.structuredContent.operation_id}` });
+  assert.equal(legacyQuery.structuredContent.operation_id, recovered.structuredContent.operation_id);
+  const legacyList = await call('read_file', { task_id: taskA, path: 'local-assistant://task/status' }); assert(legacyList.structuredContent.operations.length > 0);
+  const recoveredDone = await finish(taskA, recovered); assert.equal(recoveredDone.structuredContent.operation_state, 'completed');
+  assert(recoveredDone.structuredContent.output.includes('survived-disconnect'));
+  await call('run_file_task', reconnectArgs);
+  const rows = (await call('task_status', { task_id: taskA })).structuredContent.operations;
+  assert.equal(rows.filter(row => row.operation_id === recovered.structuredContent.operation_id).length, 1);
+  checks.push('aborted HTTP request: job survives, ID recovered, same request key does not restart it; old tool catalogue can query with read_file');
+  const status = await (await fetch(`${base}/api/status`)).json(); const backendPid = status.tasks.find(t => t.task_id === taskA).backend_pid;
+  assert(backendPid); process.kill(backendPid); await pause(500);
+  const afterExit = await finish(taskA, await call('read_file', { task_id: taskA, path: file })); assert(!afterExit.isError, JSON.stringify(afterExit));
+  checks.push('task backend exit: next call reconnects rather than reusing rejected/dead connection');
+  const cancelJob = await call('run_file_task', { task_id: taskA, command: 'Start-Sleep -Seconds 30', request_key: 'cancel-me' });
+  const cancelResponse = await fetch(`${base}/api/action`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Local-Assistant-Instance': instance }, body: JSON.stringify({ action: 'stop_operation', operation_id: cancelJob.structuredContent.operation_id }) });
+  assert.equal(cancelResponse.status, 200); const cancelled = await finish(taskA, cancelJob); assert.equal(cancelled.structuredContent.code, 'OPERATION_CANCELLED');
+  const editCloud = await call('save_chatgpt_file', { task_id: taskA, destination: path.join(root, 'cloud.txt'), file: { download_url: 'http://example.com/file', file_id: 'test' } });
+  assert.equal(editCloud.structuredContent.code, 'HTTPS_REQUIRED');
+  checks.push('explicit operation stop kills its own process; cloud-file errors exclude signed URLs');
+  const diagnosticInput = 'PRIVATE_REQUEST_MARKER_927';
+  await call('missing_tool', { task_id: taskA, secret: diagnosticInput });
+  const diagnostic = await readFile(path.join(root, 'rpc.events.private.jsonl'), 'utf8');
+  assert(!diagnostic.includes(diagnosticInput)); assert(!diagnostic.includes('download_url')); assert(!diagnostic.includes('survived-disconnect'));
+  assert(diagnostic.includes('tool_success')); assert(diagnostic.includes('tool_error'));
+  checks.push('MCP diagnostic outcome records never include parameters, commands or signed URLs');
+  const seconds = process.argv.includes('--short') ? 3 : 130;
+  const longStart = Date.now();
+  const longJob = await call('run_file_task', { task_id: taskA, command: `Write-Output 'started'; Start-Sleep -Seconds ${seconds}; Write-Output 'passed-old-deadline'`, request_key: 'past-120-seconds' });
+  assert(Date.now() - longStart < 2000); assert.equal(longJob.structuredContent.operation_state, 'running');
+  await writeFile(path.join(root, 'progress.private.json'), JSON.stringify({ root, base, instance, checks, long_operation: longJob.structuredContent.operation_id, task_id: taskA }));
+  console.log(JSON.stringify({ stage: 'long-task-running', checks, root }));
+  const longDone = await finish(taskA, longJob, 150000);
+  assert.equal(longDone.structuredContent.operation_state, 'completed'); assert(longDone.structuredContent.output.includes('passed-old-deadline'));
+  checks.push(`${seconds}-second script; initial response <2 seconds; completion output verified`);
+  await call('end_task', { task_id: taskA }); await call('end_task', { task_id: taskB });
+  const report = { passed: true, at: new Date().toISOString(), root, checks };
+  await writeFile(path.join(root, 'result.private.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report));
+} finally {
+  if (base) await fetch(`${base}/shutdown`, { method: 'POST', headers: { 'X-Local-Assistant-Instance': instance } }).catch(() => {});
+  await pause(500); if (worker.exitCode === null) worker.kill();
+}

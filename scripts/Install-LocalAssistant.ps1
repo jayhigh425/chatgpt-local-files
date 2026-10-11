@@ -11,6 +11,21 @@ $ErrorActionPreference = 'Stop'
 if ([Environment]::OSVersion.Platform -ne 'Win32NT' -or -not [Environment]::Is64BitOperatingSystem) { throw 'This installer requires 64-bit Windows.' }
 $taskKit = Split-Path $PSScriptRoot -Parent
 $taskRuntime = [IO.Path]::GetFullPath($RuntimeDirectory)
+$taskKitRoot = [IO.Path]::GetFullPath($taskKit).TrimEnd('\')
+if ($taskRuntime.TrimEnd('\').Equals($taskKitRoot, [StringComparison]::OrdinalIgnoreCase) -or $taskRuntime.StartsWith($taskKitRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Install into a private directory outside the public kit.' }
+$taskOwnedProcesses = @(Get-CimInstance Win32_Process | Where-Object {
+    ($_.Name -eq 'node.exe' -and $_.CommandLine -and $_.CommandLine.Contains((Join-Path $taskRuntime 'task-gateway.mjs'))) -or
+    ($_.ExecutablePath -eq (Join-Path $taskRuntime 'assets\keeper-host.exe')) -or
+    ($_.Name -eq 'powershell.exe' -and $_.CommandLine -and ($_.CommandLine.Contains((Join-Path $taskRuntime 'KeepAlive-LocalAssistant.ps1')) -or $_.CommandLine.Contains((Join-Path $taskRuntime 'Supervise-LocalAssistant.ps1'))))
+})
+if ($taskOwnedProcesses.Count) { throw 'This installation is still running. Finish its tasks, stop it and disable its supervision before upgrading; see docs/UPGRADING.md.' }
+$taskSettingsPath = Join-Path $taskRuntime 'settings.private.json'
+$taskPrevious = if (Test-Path -LiteralPath $taskSettingsPath) { Get-Content -LiteralPath $taskSettingsPath -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
+if ($taskPrevious) {
+    if (-not $PSBoundParameters.ContainsKey('AccessMode')) { $AccessMode = $taskPrevious.accessMode }
+    if (-not $PSBoundParameters.ContainsKey('AllowedDirectories')) { $AllowedDirectories = @($taskPrevious.allowedDirectories) }
+    if (-not $PSBoundParameters.ContainsKey('ConfigHome')) { $ConfigHome = $taskPrevious.configHome }
+}
 $taskDownloads = Get-Content -LiteralPath (Join-Path $taskKit 'assets\downloads.json') -Raw | ConvertFrom-Json
 New-Item -ItemType Directory -Path $taskRuntime -Force | Out-Null
 $taskCache = Join-Path $taskRuntime 'downloads'
@@ -53,6 +68,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $taskRuntime 'tunnel\tunnel-client.e
 Copy-Item -LiteralPath (Join-Path $taskKit 'assets\package.json') -Destination (Join-Path $taskRuntime 'package.json') -Force
 Copy-Item -LiteralPath (Join-Path $taskKit 'assets\package-lock.json') -Destination (Join-Path $taskRuntime 'package-lock.json') -Force
 Get-ChildItem -LiteralPath (Join-Path $taskKit 'runtime') -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $taskRuntime -Force }
+& (Join-Path $taskRuntime 'Build-KeeperHost.ps1')
 $taskOldPath = $env:PATH
 $taskOldPuppeteer = $env:PUPPETEER_SKIP_DOWNLOAD
 $taskOldTrack = $env:DO_NOT_TRACK
@@ -69,8 +85,6 @@ try {
     $env:DO_NOT_TRACK = $taskOldTrack
 }
 
-$taskSettingsPath = Join-Path $taskRuntime 'settings.private.json'
-$taskPrevious = if (Test-Path -LiteralPath $taskSettingsPath) { Get-Content -LiteralPath $taskSettingsPath -Raw | ConvertFrom-Json } else { $null }
 if ($AccessMode -eq 'Restricted' -and $AllowedDirectories.Count -eq 0) { $AllowedDirectories = @(Join-Path $taskRuntime 'sandbox') }
 if ($AccessMode -eq 'Restricted') {
     $AllowedDirectories = @($AllowedDirectories | ForEach-Object { [IO.Path]::GetFullPath($_) })

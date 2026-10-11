@@ -2,13 +2,15 @@
 
 **让普通 ChatGPT Chat 读取、修改和保存 Windows 本地文件，并运行本机命令。**
 
-[English](README.md) · **简体中文** · [下载最新版](https://github.com/jayhigh425/chatgpt-local-files/releases/latest) · [使用示例](docs/EXAMPLES.md) · [版本记录](CHANGELOG.md)
+[English](README.md) · **简体中文** · [下载最新版](https://github.com/jayhigh425/chatgpt-local-files/archive/refs/heads/main.zip) · [使用示例](docs/EXAMPLES.md) · [版本记录](CHANGELOG.md)
 
 ![ChatGPT Local Files](docs/banner.svg)
 
 这个开源部署包不调用模型 API、不要求充值 API 余额；推理由你的普通 ChatGPT Chat 完成。接入仍需要只授予 Tunnels Read/Use 的运行密钥，以及账号实际具有隧道和自定义 MCP 插件能力。未来平台政策以官方说明为准。
 
 让普通 ChatGPT Chat 通过开源 Desktop Commander 与 OpenAI Secure MCP Tunnel 处理接收者自己的 Windows 文件。此包分享的是部署方法，每个人独立安装、创建自己的隧道和私有插件；不是共用某人的插件、电脑或密钥。
+
+**当前源码部署包：v1.2.1。** 上方下载链接指向当前 main 分支；历史版本仍在 [Releases](https://github.com/jayhigh425/chatgpt-local-files/releases)。已有安装按 [升级说明](docs/UPGRADING.md) 更新。
 
 ## 给接收者的用法
 
@@ -24,11 +26,21 @@ Restricted 只设置文件工具的目录范围，命令工具仍按当前用户
 
 ## 多任务并发
 
-v1.1 使用本机 HTTP MCP 网关：每个 Chat 任务先调用 begin_task，随后带自己的 task_id。各任务使用独立 Desktop Commander 进程、配置、工作目录及进程/搜索状态；原有 26 个工具保留，并新增 begin_task、end_task、commit_file。长命令先返回 PID，之后分次读取输出。同一文件写入由网关协调并校验读取后的版本，旧内容不能静默覆盖新的修改。
+v1.2.1 使用本机 HTTP MCP 网关：每个 Chat 任务先调用 begin_task，随后带自己的 task_id。各任务使用独立 Desktop Commander 进程、配置、工作目录及进程/搜索状态；原有 26 个工具保留，网关增加 10 个工具，共 36 个；get_capabilities 可以查询真实版本和能力。长命令先返回 PID，之后分次读取输出。同一文件写入由网关协调并校验读取后的版本，旧内容不能静默覆盖新的修改。
 
 Full 模式继续开放全盘和命令。使用脚本修改已有文件时，先在任务目录生成工作副本，再用 commit_file 写回；该工具会检查目标版本并保留旧文件备份。任意本机命令仍可直接改文件，不能声称这些绕过网关的写入也绝对无冲突。版本协调不是权限沙箱。
 
 完成任务及其进程后调用 end_task；输出和备份保留。空闲 24 小时且没有活动进程的任务可以回收；重启后应重新 begin_task。已有 Chat 可能缓存旧工具列表，升级时需要在插件设置刷新操作，并开启新 Chat。
+
+## 长任务、后台连接与文件传输
+
+- 耗时操作约 900 毫秒后先返回 operation_id，后台继续执行；使用 get_operation/task_status 查询。相同 request_key 和参数避免重复提交，HTTP 断开不会直接取消本地任务。
+- 登录、恢复唤醒和进程退出事件触发恢复；原生无控制台守护避免控制台退出连带停止后台。没有每分钟健康检查，电脑仍需开机、登录、联网。
+- 重连会核对隧道进程实际转发的网关地址，避免“状态正常但工具失败”。Open-Status.ps1 打开动态端口的状态页；Install-StatusShortcut.ps1 可创建桌面入口。
+- **完整双向文件传输尚未实现。** 本地内容可返回聊天，但 Word/Excel/PDF 原文件不会自动进入 ChatGPT 文件/代码环境。save_chatgpt_file 已有保存接口和合成下载测试，真实云端生成文件的全流程尚未验收。
+- 文档效果检查在 ChatGPT 自身环境完成，不能把本地读取文本或下载成功说成已经检查排版。网关重启不会恢复原任务；多文件发布也不是整体事务。
+
+细节见 [运行说明](docs/RUNTIME.md) 和 [验证范围](VALIDATION.md)。
 
 ## 条件与能力
 

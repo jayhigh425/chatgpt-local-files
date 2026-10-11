@@ -24,6 +24,14 @@ PDF, Word, spreadsheets, and statistical files may require an appropriate local 
 
 > 运行本机已有脚本，长任务先返回 PID，再分次查看输出。先生成工作副本，检查目标文件最新内容后使用 commit_file 写回。
 
+## Long tasks and document checks
+
+For a script that may outlast one tool response:
+
+> Use run_file_task for this long script, record its operation ID and a unique request key, and query get_operation for completion. If a tool response is lost, query that same request key before submitting anything again. Keep outputs in the task directory and use guarded working copies when publishing changes.
+
+For Word/Excel/PDF layout checks, manually upload the original when ChatGPT's file/code environment needs it. Generate/render/view in that environment and only claim inspection of pages/sheets actually viewed. The save_chatgpt_file interface can return a host-provided file to this computer; a real cloud binary round trip is still unverified. See [RUNTIME.md](RUNTIME.md).
+
 ## Two chats at once
 
 > Start an independent task for this chat. Work on my requested files using your own task ID, process IDs, and search IDs. If a file reports FILE_CONFLICT, reread and merge instead of forcing a stale overwrite.

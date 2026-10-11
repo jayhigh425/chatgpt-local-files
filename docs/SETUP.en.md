@@ -51,7 +51,7 @@ The script uses DPAPI for the current Windows user and restricts credential file
 
 ## 3. Start and check health
 
-Run `Start-LocalAssistant.ps1` and then `Status-LocalAssistant.ps1` from the private runtime. Require all five fields:
+Run `Start-LocalAssistant.ps1` and then `Status-LocalAssistant.ps1` from the private runtime. Require all six fields:
 
 ```text
 process_running = true
@@ -59,6 +59,7 @@ healthy = true
 ready = true
 controlPlanePoll = true
 gatewayHealthy = true
+tunnelBindingMatches = true
 ```
 
 The gateway listens only on loopback and the tunnel connects through outbound HTTPS. No public local port, third-party forwarding service, or paid cloud host is required by this setup.
@@ -67,7 +68,7 @@ The gateway listens only on loopback and the tunnel connects through outbound HT
 
 Open [ChatGPT plugins](https://chatgpt.com/plugins). Add a custom MCP server using **Tunnel**, enter your own tunnel ID, and choose **None** for the MCP authentication option. Name it `Local Computer Assistant` or `本地电脑助手`. Enable developer mode only if the account's current interface requires and allows it.
 
-Connect the plugin. If the user authorized Full mode, choose **Allow all tools** for this plugin. Do not change unrelated plugins. Refresh its tools and confirm **29 tools**, including `begin_task`, `end_task`, and `commit_file`. Use a new ordinary Chat; previous conversations may cache old tools.
+Connect the plugin. If the user authorized Full mode, choose **Allow all tools** for this plugin. Do not change unrelated plugins. Refresh its tools and confirm **36 tools**, including `begin_task` and `get_capabilities` (runtime `1.2.1-local`). Use a new ordinary Chat; previous conversations may cache old tools.
 
 ## 5. Verify real Chat behavior
 
@@ -85,9 +86,11 @@ This uses disposable fixtures and the already selected scope. Its report stays i
 
 ## 6. Startup and stopping
 
-If the user authorizes login startup, run `Enable-Autostart.ps1`. The current user's Startup shortcut launches hidden background processes. The computer must stay on, signed in, and online for remote tool calls.
+If the user authorizes login startup, run `Enable-Autostart.ps1`. A current-user scheduled task starts a native no-console guardian, compiled locally from KeeperHost.cs. It reacts to login, resume and process exits, with no periodic health checks or execution-duration limit. No executable from the maintainer is shipped. The computer must stay on, signed in, and online for remote tool calls.
 
-Use `Stop-LocalAssistant.ps1` to stop the tunnel and task gateway; active tool processes are stopped with the gateway. Use `Disable-Autostart.ps1` to remove this shortcut. These actions preserve saved files and do not delete the remote tunnel or plugin.
+Use `Stop-LocalAssistant.ps1` to stop the tunnel and task gateway; active tool processes are stopped with the gateway. Use `Disable-Autostart.ps1` to disable this installation's scheduled supervision. A manual stop remains stopped until an explicit start. Use `Install-StatusShortcut.ps1` for an optional desktop status shortcut; it discovers the current port. These actions preserve saved files and do not delete the remote tunnel or plugin.
+
+For upgrades, use [UPGRADING.md](UPGRADING.md). For long operations, status and file-transfer limits, see [RUNTIME.md](RUNTIME.md).
 
 ## Troubleshooting
 

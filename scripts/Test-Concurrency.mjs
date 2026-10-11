@@ -7,6 +7,19 @@ if (!root) throw new Error('Pass your own installed private runtime directory as
 const { TaskGateway } = await import(pathToFileURL(path.join(root, 'task-gateway-core.mjs')));
 const settings = JSON.parse((await readFile(path.join(root, 'settings.private.json'), 'utf8')).replace(/^\uFEFF/, ''));
 const gateway = new TaskGateway(root, settings);
+// v1.2 returns an operation ID when work exceeds the immediate response window.
+// Keep these assertions about completed results while preserving parallel calls.
+const rawCall = gateway.call.bind(gateway);
+gateway.call = async (name, args = {}) => {
+  let result = await rawCall(name, args);
+  const deadline = Date.now() + 30000;
+  while (result.structuredContent?.operation_state === 'running') {
+    if (Date.now() >= deadline) throw new Error('Regression operation timed out.');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    result = await rawCall('get_operation', { task_id: args.task_id, operation_id: result.structuredContent.operation_id });
+  }
+  return result;
+};
 const report = { tests: {}, startedAt: new Date().toISOString() };
 const text = r => JSON.stringify(r);
 const assert = (value, label) => { if (!value) throw new Error(label); };

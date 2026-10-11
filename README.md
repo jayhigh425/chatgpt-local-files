@@ -4,10 +4,10 @@
 
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Windows](https://img.shields.io/badge/platform-Windows_10%2F11-blue.svg)](docs/SETUP.en.md)
-[![Release](https://img.shields.io/github/v/release/jayhigh425/chatgpt-local-files)](https://github.com/jayhigh425/chatgpt-local-files/releases/latest)
+[![Source version](https://img.shields.io/badge/source-v1.2.1-blue.svg)](https://github.com/jayhigh425/chatgpt-local-files/archive/refs/heads/main.zip)
 [![Public kit checks](https://github.com/jayhigh425/chatgpt-local-files/actions/workflows/validate.yml/badge.svg)](https://github.com/jayhigh425/chatgpt-local-files/actions/workflows/validate.yml)
 
-**English** · [简体中文](README.zh-CN.md) · [Download](https://github.com/jayhigh425/chatgpt-local-files/releases/latest) · [Examples](docs/EXAMPLES.md) · [Setup guide](docs/SETUP.en.md)
+**English** · [简体中文](README.zh-CN.md) · [Download](https://github.com/jayhigh425/chatgpt-local-files/archive/refs/heads/main.zip) · [Examples](docs/EXAMPLES.md) · [Setup guide](docs/SETUP.en.md)
 
 ![ChatGPT Local Files: your ChatGPT chat, your Windows files](docs/banner.svg)
 
@@ -19,18 +19,23 @@ Ask ChatGPT to find research notes, edit a local document, run an installed scri
 
 | Capability | How it works |
 | --- | --- |
-| Read and search local files | Operate on your own Windows filesystem instead of uploading every working file manually. |
+| Read and search local files | Return file contents to ChatGPT through local tools. This does not automatically upload binary documents into ChatGPT's file/code environment. |
 | Edit and save results | Changes and generated outputs are saved directly on your computer. |
 | Run local programs | Use installed command-line tools as the current Windows user. |
 | Work across several chats | Separate task processes, configurations, terminal buffers, search state, and working directories. |
 | Handle competing file edits | Detect stale saves; reread and merge. Commit working copies with a backup of the previous target. |
+| Continue long operations | Receive an operation ID promptly, query progress, and recover the ID after an HTTP disconnect using a request key. |
+| Keep the connection running | Hidden event-driven supervision and a native no-console guardian; verify the live tunnel target when reconnecting. |
+| Inspect local status | Open the local dashboard for connection, task, operation and safe RPC outcome records. |
 | Configure another computer | Give the public kit to that person's Codex. Each user creates their own private connection. |
 
 Full mode supports the current user's accessible filesystem and commands, including an entire drive. It does not grant administrator privileges. Restricted mode narrows file-tool paths; command tools are not an OS sandbox. See [security boundaries](SECURITY.md).
 
+**Current source kit: v1.2.1.** Download the main-branch ZIP for this version. Earlier tagged releases remain available in [Releases](https://github.com/jayhigh425/chatgpt-local-files/releases). Existing installations should follow [UPGRADING.md](docs/UPGRADING.md).
+
 ## Quick start
 
-1. [Download the latest release](https://github.com/jayhigh425/chatgpt-local-files/releases/latest), extract the complete ZIP, and keep its folder structure.
+1. [Download the latest release](https://github.com/jayhigh425/chatgpt-local-files/archive/refs/heads/main.zip), extract the complete ZIP, and keep its folder structure.
 2. Give the extracted directory to **your own Codex**, together with this prompt:
 
 ```text
@@ -86,15 +91,23 @@ flowchart LR
     B --> Files
 ```
 
-The original 26 Desktop Commander tools remain, with three additional tools:
+The original 26 Desktop Commander tools remain, with 10 gateway tools (36 total):
 
 | Tool | Purpose |
 | --- | --- |
-| `begin_task` | Create this chat's task ID, isolated backend, and working directory. |
-| `end_task` | Close the task when its work and processes finish; retain files. |
-| `commit_file` | Save a working copy after a version check, preserving a backup of the previous target. |
+| `begin_task`, `end_task` | Create and close this chat's isolated task. |
+| `get_capabilities` | Read live runtime version, tool count, dependencies and limitations without starting a task. |
+| `commit_file` | Publish a working copy after checking the target version, retaining the previous target as a backup. |
+| `get_operation`, `task_status` | Query background operations and recover a submitted request by its request key. |
+| `prepare_file_edit`, `commit_file_edit` | Create guarded working copies and publish after file-version checks. |
+| `run_file_task` | Run a local script in the background and optionally publish guarded working copies. |
+| `save_chatgpt_file` | Download a ChatGPT-provided HTTPS file object to the local computer. |
 
-Subsequent tool calls carry that task's `task_id`. Long commands return a PID promptly, so another task can continue. File tools coordinate saves and report `READ_REQUIRED` or `FILE_CONFLICT` when appropriate. Direct command writes can bypass these checks; use working copies and coordinate final writes to the same file.
+Subsequent local calls carry their own `task_id`. Slow operations return an operation ID after about 900 ms while work continues; an HTTP disconnect does not cancel them. Reuse a request key only for the same arguments. Query progress with `get_operation`; an old tool catalogue can use `read_file` with `local-assistant://operations/<operation ID>`.
+
+File tools detect stale saves. Arbitrary command writes can bypass these checks. Files in one edit are published individually, not as a cross-file transaction. Tasks and operations are not restored after a gateway restart.
+
+**Binary transfer is not yet complete in both directions.** Local Word/Excel/PDF files are not automatically mounted in ChatGPT's file/code environment. The return-file interface exists and has synthetic download/conflict tests, but a real ChatGPT-generated binary round trip has not been verified. For visual quality checks, generate/render/view in ChatGPT's own environment and report what was actually inspected. See [current runtime behavior](docs/RUNTIME.md).
 
 ## FAQ
 
@@ -108,7 +121,7 @@ Subsequent tool calls carry that task's `task_id`. Long commands return a PID pr
 
 **Can I share my configured plugin?** Share the public kit. Others create their own tunnel, credential, and private plugin. This is not a shared remote computer or a public plugin-store listing.
 
-**What has been tested?** Windows PowerShell 5.1 installation, Chinese/space paths, pinned dependencies, scope configuration, file operations, process isolation, concurrent edit conflict handling, actual tunnel HTTP forwarding with a local mock control plane, and one real ordinary Chat acceptance run. New users must pass their own acceptance test. See [VALIDATION.md](VALIDATION.md).
+**What has been tested?** Installation, concurrency, request disconnect recovery, idempotent operations, local status protection, synthetic artifact saves and diagnostics privacy. The maintainer's private deployment also passed cloud tool calls, live tunnel rebinding and native guardian recovery. Each new installation still needs its own ordinary Chat acceptance test. New users must pass their own acceptance test. See [VALIDATION.md](VALIDATION.md).
 
 ## Project files
 

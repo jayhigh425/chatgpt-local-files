@@ -14,6 +14,6 @@
     <path d="M792 390h64m-14-10 14 10-14 10" fill="none" stroke="#8ee8d0" stroke-width="3"/>
     <rect x="872" y="333" width="330" height="115" rx="16" fill="#124640" stroke="#5bbda9"/><text x="1037" y="382" fill="#fff">Your Windows computer</text><text x="1037" y="414" fill="#a8dfd3" font-size="17">Read · Edit · Run · Save</text>
   </g>
-  <text x="78" y="541" fill="#8ee8d0" font-size="22" font-family="Segoe UI,Arial,sans-serif">No model API calls · 29 tools · Conflict-aware saves</text>
+  <text x="78" y="541" fill="#8ee8d0" font-size="22" font-family="Segoe UI,Arial,sans-serif">No model API calls · 36 tools · Background operations</text>
   <text x="78" y="584" fill="#a6bcc8" font-size="18" font-family="Segoe UI,Arial,sans-serif">A reproducible setup kit. Each user creates their own private connection.</text>
 </svg>

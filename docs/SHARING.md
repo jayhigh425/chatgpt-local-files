@@ -2,7 +2,7 @@
 
 Project: https://github.com/jayhigh425/chatgpt-local-files
 
-Download: https://github.com/jayhigh425/chatgpt-local-files/releases/latest
+Download: https://github.com/jayhigh425/chatgpt-local-files/archive/refs/heads/main.zip
 
 Use these short descriptions when sharing a verified installation. Do not promise account eligibility, unlimited access, future pricing, or conflict-free arbitrary commands. Attach only a demonstration made with disposable files.
 

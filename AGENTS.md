@@ -6,8 +6,9 @@
 - 使用当前接收者自己的账号、隧道、workspace 和 Tunnels Read/Use 运行密钥。不要复用他人身份。此包没有预填任何账号 ID。
 - Full 模式清空目录白名单与命令黑名单，并在该插件的 ChatGPT 设置选择“允许使用所有工具”。仅在当前用户已授权这些范围时使用；README 中的完整部署提示已明确授权，无需重复确认。否则先安装依赖并准备可审阅配置，再确认一次权限范围。指定目录模式用 Restricted。
 - Desktop Commander 使用当前用户的共享 `.claude-server-commander/config.json`；更改之前备份原目录与命令设置。说明这也可能影响该用户已有的 Desktop Commander 客户端。
-- v1.1 的任务后端使用各自 config 目录；安装阶段的共享配置备份规则仍适用。不要移除 per-task 配置 hook、task_id 或文件版本检查；它们协调并发，不缩小已授权磁盘范围。
-- 启动后检查 gatewayHealthy；升级已有插件时刷新工具并使用新 Chat。普通 Chat 应实际调用 begin_task、携带自己的 task_id、完成读写再 end_task。不能复用别的 Chat 的任务编号。
+- v1.2.1 的任务后端使用各自 config 目录；安装阶段的共享配置备份规则仍适用。不要移除 per-task 配置 hook、task_id 或文件版本检查；它们协调并发，不缩小已授权磁盘范围。
+- 启动后检查 gatewayHealthy 和 tunnelBindingMatches；升级已有插件时刷新工具并使用新 Chat。普通 Chat 应实际调用 begin_task、携带自己的 task_id、完成读写再 end_task。不能复用别的 Chat 的任务编号。
+- 耗时操作使用 operation_id 和 request_key 查询与去重；HTTP 断开不等于取消。网关重启不恢复原任务。文档排版检查在 ChatGPT 环境完成；没有实际查看就不能说已验收。本地二进制文件自动传入 ChatGPT 和完整双向传输尚未实现。
 - 不调用模型 API，不充值，不创建管理员 API 密钥，不购买第三方服务，不发布公共插件。官方 Secure MCP Tunnel 用于各自私有连接，不能将这个私有 tunnel 插件直接作为公共商店插件分发。
 - 密钥只能在本机内存或安全输入中流转，保存为 DPAPI 密文；不得写入聊天、命令参数明文、日志、公共包或代码仓库。网页新建密钥时，避免将包含密钥的 DOM/截图输出给模型。不要向用户索取聊天中的密钥。
 - 优先使用接收者现有的浏览器工具和登录态。没有浏览器控制能力时，打开官方页面并让用户完成必要账号操作，同时继续本地安装。不要依赖分享者电脑上安装的 skill、浏览器代理端口或工具。

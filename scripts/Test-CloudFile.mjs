@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+if (!process.argv[2]) throw new Error('Pass your installed private runtime directory.');
+const installed = path.resolve(process.argv[2]);
+const { TaskGateway } = await import(pathToFileURL(path.join(installed, 'task-gateway-core.mjs')));
+const root = path.join(installed, 'verification', `cloud-file-test-${randomUUID()}`); await mkdir(root, { recursive: true });
+const gateway = new TaskGateway(root, { accessMode: 'Full', configHome: root });
+const task = await gateway.createTask('Isolated cloud bridge');
+const destination = path.join(root, 'result.docx'); const secretUrl = 'https://files.example.invalid/artifact?temporary-secret=never-in-logs';
+const originalFetch = globalThis.fetch;
+const mockResponse = content => { const response = new Response(content); Object.defineProperty(response, 'url', { value: secretUrl }); return response; };
+try {
+  globalThis.fetch = async () => mockResponse('synthetic document bytes');
+  const result = await gateway.call('save_chatgpt_file', { task_id: task.id, destination, file: { download_url: secretUrl, file_id: 'synthetic-test' }, qa_report: 'Synthetic test only; no visual inspection claimed.' });
+  assert.equal(result.isError, undefined); assert.equal(await readFile(destination, 'utf8'), 'synthetic document bytes');
+  assert.equal(result.structuredContent.qa_source, 'ChatGPT environment (self-reported)');
+  assert(!JSON.stringify(result).includes('temporary-secret'));
+  task.versions.set(gateway.key(destination), await gateway.version(destination));
+  globalThis.fetch = async () => { await writeFile(destination, 'concurrent user change'); task.versions.set(gateway.key(destination), await gateway.version(destination)); return mockResponse('replacement'); };
+  const conflict = await gateway.call('save_chatgpt_file', { task_id: task.id, destination, file: { download_url: secretUrl, file_id: 'synthetic-test-2' } });
+  assert.equal(conflict.structuredContent.code, 'FILE_CONFLICT'); assert.equal(await readFile(destination, 'utf8'), 'concurrent user change');
+  globalThis.fetch = async () => { throw new Error(secretUrl); };
+  const error = await gateway.call('save_chatgpt_file', { task_id: task.id, destination: path.join(root, 'other.pdf'), file: { download_url: secretUrl, file_id: 'synthetic-test-3' } });
+  assert(error.isError); assert(!JSON.stringify(error).includes('temporary-secret'));
+  await gateway.operations.eventWrites;
+  assert(!(await readFile(path.join(root, 'operations.events.private.jsonl'), 'utf8')).includes('temporary-secret'));
+  console.log(JSON.stringify({ passed: true, checks: ['streamed artifact save', 'destination changes during download preserve user edits', 'signed URL excluded from results and event logs'], mock_download: true, cloud_visual_qa_verified: false }));
+} finally { globalThis.fetch = originalFetch; await gateway.close(); }
